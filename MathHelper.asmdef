@@ -1,0 +1,17 @@
+{
+    "name": "MathHelper",
+    "rootNamespace": "MathHelper",
+    "references": [
+        "GUID:6e17303a7eda2044b95035f69dde5dc3",
+        "GUID:3f5a4d757d7ec93498cfb28e3ef52750"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
