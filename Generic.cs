@@ -10,15 +10,168 @@ namespace MathHelper
 {
 	public static class Generic
 	{
+		public const float PI2 = Mathf.PI * 2f;
+		
 		public readonly static Regex NUMBERS = new(@"\d*\.?\d+");
+		
+		public static RectTransform MoveAndClampToCanvas
+		(this RectTransform rectTransform,
+		Canvas canvas,
+		RectTransform canvasRectTransform,
+		Vector2 position)
+		{
+			Vector2 ratio = CanvasToRectRatio(canvas, canvasRectTransform);
+			
+			rectTransform.anchoredPosition = position * ratio;
+			
+			return Clamp(rectTransform, Screen.safeArea.size * ratio);
+		}
+		
+		/// <summary>
+		/// Clamps to `Screen.safeArea.size`.
+		/// </summary>
+		public static RectTransform ClampToScreen
+		(this RectTransform rectTransform) =>
+			Clamp(
+				rectTransform,
+				Screen.safeArea.size
+			);
+		
+		public static RectTransform ClampToCanvas
+		(this RectTransform rectTransform,
+		Canvas canvas,
+		RectTransform canvasRectTransform) =>
+			Clamp(
+				rectTransform,
+				Screen.safeArea.size *
+				CanvasToRectRatio(
+					canvas,
+					canvasRectTransform
+				)
+			);
+
+		public static Vector2 ToCanvasPosition
+		(this Vector2 position,
+		Canvas canvas,
+		RectTransform canvasRectTransform) =>
+			position *
+			CanvasToRectRatio(canvas, canvasRectTransform);
+
+		public static Vector2 CanvasToRectRatio
+		(this Canvas canvas,
+		RectTransform rectTransform) =>
+			rectTransform.rect.size /
+			canvas.pixelRect.size;
+
+		/// <summary>
+		/// Clamps the given RectTransform within the Vector2.
+		/// </summary>
+		public static RectTransform Clamp
+		(this RectTransform rectTransform,
+		Vector2 screenSize)
+		{
+			Vector2 size = rectTransform.sizeDelta;
+			Vector2 pivot = rectTransform.pivot;
+			
+			rectTransform.anchoredPosition =
+				new(
+					Mathf.Clamp(
+						rectTransform.anchoredPosition.x,
+						pivot.x * size.x,
+						screenSize.x -
+						(1f - pivot.x) * size.x
+					),
+					Mathf.Clamp(
+						rectTransform.anchoredPosition.y,
+						pivot.y * size.y,
+						screenSize.y -
+						(1f - pivot.y) * size.y
+					)
+				);
+			
+			return rectTransform;
+		}
+		
+		/// <summary>
+		/// Binary search but prefers inserting at the right-side
+		/// if there are equal values.
+		/// </summary>
+		/// <summary>
+		/// <returns>
+		/// The index where the item should be inserted to remain sorted
+		/// from lowest to highest.
+		/// </returns>
+		public static int RightwiseBinarySearch<T>
+		(this IList<T> list,
+		T item,
+		IComparer<T> comparer)
+		{
+			int lo = 0;
+			int hi = list.Count;
+			
+			for (uint i = 0; i < 999; i++)
+			{
+				int difference = hi - lo;
 				
+				if (difference == 0)
+					break;
+					
+				int mi = lo + difference / 2;
+				
+				if (comparer.Compare(item, list[mi]) < 0)
+				{
+					hi = mi;
+					continue;
+				}
+				
+				lo = mi + 1;
+			}
+			
+			return hi;
+		}
+		
+		public static Vector2[] Donut
+		(int points = 17,
+		float innerRadius = 0.1f,
+		float outerRadius = 0.5f,
+		float innerRadians = Mathf.PI * 2f,
+		float outerRadians = Mathf.PI * 2f,
+		float offsetRadian = 0f)
+		{
+			if (points == 0)
+				return new Vector2[0];
+				
+			Vector2[] result = new Vector2[points * 2];
+			int max = points - 1;
+			float innerOffset = offsetRadian + (PI2 - innerRadians) * 0.5f;
+			float outerOffset = offsetRadian + (PI2 - outerRadians) * 0.5f;
+			
+			for (int i = 0; i < points; i++)
+			{
+				float inner = innerOffset + innerRadians * i / max;
+				float outer = outerOffset + outerRadians * (max - i) / max;
+				
+				result[i] = new(
+					Mathf.Cos(inner) * innerRadius,
+					Mathf.Sin(inner) * innerRadius
+				);
+				
+				result[i + points] = new(
+					Mathf.Cos(outer) * outerRadius,
+					Mathf.Sin(outer) * outerRadius
+				);
+			}
+			
+			return result;
+		}
+		
 		/// <summary>
 		/// Like `IEnumerable<Number>.Sum()`,
 		/// but multiplies instead of adding.
 		/// </summary>
 		public static float Diminish
-			(this IEnumerable<float> enumerable,
-			float initial_value = 1f)
+		(this IEnumerable<float> enumerable,
+		float initial_value = 1f)
 		{
 			foreach (float value in enumerable)
 				if (initial_value != 0f)
@@ -30,10 +183,10 @@ namespace MathHelper
 		}
 		
 		public static bool MaxConsecutive
-			(this IEnumerable<int> enumerable,
-			out int value,
-			int step = 1,
-			int start = 1)
+		(this IEnumerable<int> enumerable,
+		out int value,
+		int step = 1,
+		int start = 1)
 		{
 			value = start;
 			bool started = false;
@@ -115,31 +268,129 @@ namespace MathHelper
 				.Distinct()
 				.Select(x => x.Select(y => vectors[y]));
 		}
+		
+		/// <summary>
+		/// The `reducePredicate` and `comparePredicate` are the same.
+		/// </summary>
+		public static IEnumerable<T> PointDistribution<T>
+		(this IEnumerable<T> items,
+		Func<T, float> predicate,
+		float points,
+		bool noDuplicate = true,
+		uint maxRoll = 100) =>
+			PointDistribution(
+				items,
+				predicate,
+				predicate,
+				points,
+				noDuplicate,
+				maxRoll
+			);
+		
+		/// <summary>
+		/// Roll until there is nothing left or no points left.
+		/// <br/>
+		/// Items with higher points are prioritized.
+		/// <br/>
+		/// Has a limit of items returned to prevent infinite loop.
+		/// </summary>
+		/// <param name="reducePredicate">
+		/// When chosen,
+		/// this is the value that is deducted to the total points.
+		/// </param>
+		/// <param name="comparePredicate">
+		/// When using the weighted distribution,
+		/// this is the value that is being compared.
+		/// </param>
+		public static IEnumerable<T> PointDistribution<T>
+		(this IEnumerable<T> items,
+		Func<T, float> reducePredicate,
+		Func<T, float> comparePredicate,
+		float points,
+		bool noDuplicate = true,
+		uint maxRoll = 100)
+		{
+			Tuple<float, float, T> Selector(T item) =>
+				new(
+					reducePredicate(item),
+					comparePredicate(item),
+					item
+				);
+			
+			List<Tuple<float, float, T>> sortedItems =
+				items
+				.Select(Selector)
+				.OrderBy(v => v.Item1)
+				.ToList();
+			
+			for (int i = 0; i < maxRoll && sortedItems.Count > 0; i++)
+			{
+				while (sortedItems.Count > 0)
+				{
+					int index = sortedItems.Count - 1;
+					
+					if (sortedItems[index].Item1 <= points)
+						break;
+						
+					sortedItems.RemoveAt(index);
+				}
+				
+				if (sortedItems.Count == 0)
+					break;
+					
+				bool ok =
+					WeightedDistribution(
+						sortedItems,
+						v => v.Item2
+					)
+					.TryFirst(
+						out Tuple<float, float, T> item
+					);
+					
+				if (!ok)
+					// Something went wrong.
+					break;
+					
+				points -= item.Item1;
+				
+				if (noDuplicate)
+					sortedItems.Remove(item);
+					
+				yield return item.Item3;
+			}
+		}
 
-		public static bool WeightedDistribution<T>
-			(IEnumerable<T> items,
-			Func<T, float> weightPredicate,
-			out T result)
+		public static IEnumerable<T> WeightedDistribution<T>
+		(this IEnumerable<T> items,
+		Func<T, float> weightPredicate,
+		uint maxRoll = 100)
 		{
 			float max = 0f;
 			Dictionary<T, float> values = new();
 
 			foreach (T item in items)
 				max += values[item] = weightPredicate(item);
+			
+			if (values.Count == 0)
+				yield break;
 
-			float value = UnityEngine.Random.value * max;
+			while (maxRoll > 0)
+			{
+				float value = UnityEngine.Random.value * max;
 
-			foreach (KeyValuePair<T, float> item in values)
-				if (value <= item.Value)
+				foreach (KeyValuePair<T, float> item in values)
 				{
-					result = item.Key;
-					return true;
-				}
-				else
+					if (value <= item.Value)
+					{
+						yield return item.Key;
+						break;
+					}
+					
 					value -= item.Value;
-
-			result = default;
-			return false;
+				}
+				
+				maxRoll--;
+			}
 		}
 
 		/// <summary>
@@ -305,18 +556,23 @@ namespace MathHelper
 		/// Get direction from a to b.
 		/// </summary>
 		public static Vector2 Towards
-			(this Vector2 a, Vector2 b) =>
+		(this Vector2 a, Vector2 b) =>
 			(b - a).normalized;
 
 		public static Vector3 Towards
-			(this Vector3 a, Vector3 b) =>
+		(this Vector3 a, Vector3 b) =>
 			(b - a).normalized;
+
+		public static Vector2 Towards
+		(this Vector3 a, Vector2 b) =>
+			(b - ((Vector2)a)).normalized;
+
+		public static Vector2 Towards
+		(this Vector2 a, Vector3 b) =>
+			(((Vector2)b) - a).normalized;
 
 		public static float Radians(this Vector2 v) =>
 			Mathf.Atan2(v.y, v.x);
-
-		public static float SquareMagnitude(this float x, float y) =>
-			x * x + y * y;
 
 		/// <summary>
 		/// Get distance between a and b.
@@ -398,5 +654,22 @@ namespace MathHelper
 				Mathf.Atan2(direction.y, direction.x)
 				.R2D()
 			);
+		
+		/// <summary>
+		/// Inclusive.
+		/// </summary>
+		public static bool Between
+		(this float value,
+		float smaller,
+		float bigger) =>
+			value >= smaller &&
+			value <= bigger;
+
+		public static float NormalizeBetween
+		(this float value,
+		float smaller,
+		float bigger) =>
+			(value - smaller) /
+			(bigger - smaller);
 	}
 }
